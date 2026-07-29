@@ -1,6 +1,6 @@
 package com.worklyze.supportiq.shared.page;
 
-import com.worklyze.worklyze.shared.page.interfaces.PageResult;
+import com.worklyze.supportiq.shared.page.interfaces.PageResult;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -12,7 +12,7 @@ import java.util.List;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-public class PageResultImpl<T> implements PageResult<T>{
+public class PageResultImpl<T> implements PageResult<T> {
     public List<T> items;
     public Integer pageNumber;
     public Integer pageSize;

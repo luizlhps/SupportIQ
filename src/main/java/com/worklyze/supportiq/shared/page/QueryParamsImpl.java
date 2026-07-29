@@ -1,6 +1,6 @@
 package com.worklyze.supportiq.shared.page;
 
-import com.worklyze.worklyze.shared.page.interfaces.QueryParams;
+import com.worklyze.supportiq.shared.page.interfaces.QueryParams;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;

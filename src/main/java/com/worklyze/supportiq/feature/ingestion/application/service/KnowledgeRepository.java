@@ -13,4 +13,9 @@ public interface KnowledgeRepository {
             List<TextSegment> segments
     );
 
+    List<TextSegment> findRelevant(
+            Embedding embedding,
+            int maxResults
+    );
+
 }

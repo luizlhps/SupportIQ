@@ -6,5 +6,5 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.InputStream;
 
 public interface PdfIngestionUseCase {
-    void execute(String fileName, InputStream inputStream) throws TikaException;
+    void execute(String fileName, InputStream inputStream) ;
 }

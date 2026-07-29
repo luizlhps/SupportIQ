@@ -1,6 +1,6 @@
 package com.worklyze.supportiq.shared.page.interfaces;
 
-import com.worklyze.worklyze.shared.page.PageListImpl;
+import com.worklyze.supportiq.shared.page.PageListImpl;
 
 public interface QueryParams {
     PageListImpl getPagination();

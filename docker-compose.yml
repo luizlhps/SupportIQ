@@ -1,0 +1,47 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: supportiq-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-supportiq}
+      POSTGRES_USER: ${DB_USER:-supportiq}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-supportiq}
+    ports:
+      - "${DB_PORT:-5433}:5432"
+    volumes:
+      - supportiq_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-supportiq} -d ${DB_NAME:-supportiq}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: supportiq-ollama
+    restart: unless-stopped
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - supportiq_ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ollama-model-pull:
+    image: ollama/ollama:latest
+    container_name: supportiq-ollama-model-pull
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c", "ollama pull ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text} && ollama pull ${OLLAMA_CHAT_MODEL:-llama3.2}"]
+    environment:
+      OLLAMA_HOST: ollama:11434
+    restart: "no"
+
+volumes:
+  supportiq_postgres_data:
+  supportiq_ollama_data:

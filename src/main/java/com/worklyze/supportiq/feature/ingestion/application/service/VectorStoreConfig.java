@@ -24,8 +24,8 @@ public class VectorStoreConfig {
     ) {
 
 
-        return PgVectorEmbeddingStore.builder()
-                .database(dataSource)
+        return PgVectorEmbeddingStore.datasourceBuilder()
+                .datasource(dataSource)
                 .table("knowledge_embedding")
                 .dimension(
                     embeddingModel.dimension()
