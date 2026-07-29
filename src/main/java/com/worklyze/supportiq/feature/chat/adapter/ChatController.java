@@ -26,6 +26,6 @@ public class ChatController {
 
         ChatAnswer chatAnswer = askQuestionUseCase.execute(request.sessionId(), request.question());
 
-        return ResponseEntity.ok(new ChatResponse(chatAnswer.answer(), chatAnswer.sessionId()));
+        return ResponseEntity.ok(new ChatResponse(chatAnswer.answer(), chatAnswer.sessionId(), chatAnswer.images()));
     }
 }

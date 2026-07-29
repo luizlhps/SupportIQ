@@ -9,6 +9,7 @@ import dev.langchain4j.data.segment.TextSegment;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -18,9 +19,11 @@ public class LangChainDocumentSplitter
 
 
     private final DocumentByParagraphSplitter splitter;
+    private final ImageStorageService imageStorageService;
 
 
-    public LangChainDocumentSplitter() {
+    public LangChainDocumentSplitter(ImageStorageService imageStorageService) {
+        this.imageStorageService = imageStorageService;
         this.splitter =
                 new DocumentByParagraphSplitter(
                         1000,
@@ -40,18 +43,30 @@ public class LangChainDocumentSplitter
         for (ParsedPage page : document.pages()) {
 
 
+            Map<String, Object> metadata = new HashMap<>(
+                    Map.of(
+                            "fileName",
+                            document.fileName(),
+
+                            "page",
+                            page.pageNumber()
+                    )
+            );
+
+            if (page.hasImages()) {
+                List<String> imagePaths = imageStorageService.store(
+                        document.fileName(),
+                        page.pageNumber(),
+                        page.images()
+                );
+                metadata.put("images", String.join(",", imagePaths));
+                metadata.put("imageCount", page.images().size());
+            }
+
             Document langDocument =
                     Document.from(
                             page.text(),
-                            Metadata.from(
-                                    Map.of(
-                                            "fileName",
-                                            document.fileName(),
-
-                                            "page",
-                                            page.pageNumber()
-                                    )
-                            )
+                            Metadata.from(metadata)
                     );
 
 
@@ -63,4 +78,5 @@ public class LangChainDocumentSplitter
 
         return segments;
     }
-}
+
+}

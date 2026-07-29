@@ -17,7 +17,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -53,7 +57,9 @@ public class AskQuestionUseCaseImpl implements AskQuestionUseCase {
                 .map(TextSegment::text)
                 .collect(Collectors.joining("\n---\n"));
 
-        memory.add(SystemMessage.from(buildSystemPrompt(context)));
+        List<String> imagePaths = extractImagePaths(relevantSegments);
+
+        memory.add(SystemMessage.from(buildSystemPrompt(context, imagePaths)));
         memory.add(UserMessage.from(question));
 
         ChatResponse response = chatModel.chat(memory.messages());
@@ -61,28 +67,51 @@ public class AskQuestionUseCaseImpl implements AskQuestionUseCase {
 
         memory.add(aiMessage);
 
-        return new ChatAnswer(activeSessionId, aiMessage.text());
+        return new ChatAnswer(activeSessionId, aiMessage.text(), imagePaths);
     }
 
-    private String buildSystemPrompt(String context) {
+    private String buildSystemPrompt(String context, List<String> imagePaths) {
+
+        String imageInfo = imagePaths.isEmpty()
+                ? ""
+                : "\n\nAs seguintes imagens foram encontradas no contexto e podem ser relevantes:\n"
+                        + String.join("\n", imagePaths)
+                        + "\n\nCite as imagens relevantes na sua resposta quando apropriado.";
 
         if (context.isBlank()) {
             return """
                     Você é um assistente de suporte. Não há contexto disponível na base de conhecimento para a
                     pergunta atual. Informe ao usuário que não foi encontrada informação relevante e responda
                     com cautela, sem inventar fatos. Use o histórico da conversa apenas como referência de contexto
-                    da interação, não como fonte de fatos sobre o produto/serviço.
-                    """;
+                    da interação, não como fonte de fatos sobre o produto/serviço.%s
+                    """.formatted(imageInfo);
         }
 
         return """
                 Você é um assistente de suporte. Responda a pergunta do usuário utilizando apenas as informações
                 do contexto abaixo, extraído da base de conhecimento. Se o contexto não for suficiente para
                 responder, diga que não possui essa informação. Considere também o histórico da conversa para
-                manter a coerência das respostas.
+                manter a coerência das respostas.%s
 
                 Contexto:
                 %s
-                """.formatted(context);
+                """.formatted(imageInfo, context);
+    }
+
+    private List<String> extractImagePaths(List<TextSegment> segments) {
+
+        Set<String> paths = new LinkedHashSet<>();
+
+        for (TextSegment segment : segments) {
+            String images = segment.metadata().getString("images");
+            if (images != null && !images.isBlank()) {
+                Arrays.stream(images.split(","))
+                        .map(String::trim)
+                        .filter(s -> !s.isEmpty())
+                        .forEach(paths::add);
+            }
+        }
+
+        return new ArrayList<>(paths);
     }
 }
