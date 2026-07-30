@@ -3,7 +3,7 @@ package com.worklyze.supportiq.feature.chat.application.usecase;
 import com.worklyze.supportiq.feature.chat.application.service.ChatSessionMemoryStore;
 import com.worklyze.supportiq.feature.chat.domain.usecases.AskQuestionUseCase;
 import com.worklyze.supportiq.feature.chat.shared.ChatAnswer;
-import com.worklyze.supportiq.feature.ingestion.application.service.KnowledgeRepository;
+import com.worklyze.supportiq.feature.embedding.KnowledgeRepository;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.SystemMessage;

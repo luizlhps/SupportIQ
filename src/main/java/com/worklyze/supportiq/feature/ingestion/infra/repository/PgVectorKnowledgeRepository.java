@@ -1,6 +1,7 @@
-package com.worklyze.supportiq.feature.ingestion.application.service;
+package com.worklyze.supportiq.feature.ingestion.infra.repository;
 
 
+import com.worklyze.supportiq.feature.embedding.KnowledgeRepository;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.store.embedding.EmbeddingSearchRequest;

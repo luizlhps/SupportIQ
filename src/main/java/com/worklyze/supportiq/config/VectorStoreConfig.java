@@ -1,4 +1,4 @@
-package com.worklyze.supportiq.feature.ingestion.application.service;
+package com.worklyze.supportiq.config;
 
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
