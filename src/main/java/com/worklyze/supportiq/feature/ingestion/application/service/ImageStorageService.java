@@ -11,4 +11,6 @@ public interface ImageStorageService {
             int pageNumber,
             List<KnowledgeImage> images
     );
+
+    void deleteAllFor(String documentName);
 }

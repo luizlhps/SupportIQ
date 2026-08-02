@@ -9,7 +9,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Stream;
 
 @Service
 public class LocalImageStorageService implements ImageStorageService {
@@ -60,6 +62,33 @@ public class LocalImageStorageService implements ImageStorageService {
         }
 
         return storedPaths;
+    }
+
+    @Override
+    public void deleteAllFor(String documentName) {
+
+        if (documentName == null || documentName.isBlank()) {
+            return;
+        }
+
+        Path docDir = Paths.get(storageDir, sanitize(documentName));
+
+        if (!Files.exists(docDir)) {
+            return;
+        }
+
+        try (Stream<Path> paths = Files.walk(docDir)) {
+            paths.sorted(Comparator.reverseOrder())
+                    .forEach(path -> {
+                        try {
+                            Files.deleteIfExists(path);
+                        } catch (IOException e) {
+                            throw new RuntimeException("Erro ao remover arquivo: " + path, e);
+                        }
+                    });
+        } catch (IOException e) {
+            throw new RuntimeException("Erro ao remover diretório de imagens: " + docDir, e);
+        }
     }
 
     private String sanitize(String name) {

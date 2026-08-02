@@ -10,6 +10,7 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDResources;
 import org.apache.pdfbox.pdmodel.graphics.PDXObject;
+import org.apache.pdfbox.pdmodel.graphics.form.PDFormXObject;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.stereotype.Service;
@@ -20,7 +21,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class PdfDocumentParser implements DocumentParser {
@@ -38,7 +41,7 @@ public class PdfDocumentParser implements DocumentParser {
 
                 String text = extractText(document, pageNumber);
 
-                List<KnowledgeImage> images = extractImages(page);
+                List<KnowledgeImage> images = extractImages(page, pageNumber);
 
                 pages.add(new ParsedPage(
                         pageNumber,
@@ -66,11 +69,26 @@ public class PdfDocumentParser implements DocumentParser {
         return text == null ? "" : text.trim();
     }
 
-    private List<KnowledgeImage> extractImages(PDPage page) throws IOException {
+    private List<KnowledgeImage> extractImages(PDPage page, int pageNumber) throws IOException {
 
         List<KnowledgeImage> images = new ArrayList<>();
+        Set<String> visited = new HashSet<>();
 
-        PDResources resources = page.getResources();
+        collectImages(page.getResources(), images, visited, pageNumber);
+
+        return images;
+    }
+
+    private void collectImages(
+            PDResources resources,
+            List<KnowledgeImage> images,
+            Set<String> visited,
+            int pageNumber
+    ) throws IOException {
+
+        if (resources == null) {
+            return;
+        }
 
         for (COSName name : resources.getXObjectNames()) {
 
@@ -78,19 +96,36 @@ public class PdfDocumentParser implements DocumentParser {
 
             if (object instanceof PDImageXObject imageObject) {
 
+                // Deduplica imagens compartilhadas entre XObjects na mesma página.
+                String key = System.identityHashCode(imageObject.getCOSObject()) + "-" + name.getName();
+                if (!visited.add(key)) {
+                    continue;
+                }
+
                 BufferedImage bufferedImage = imageObject.getImage();
+                if (bufferedImage == null) {
+                    continue;
+                }
 
                 ByteArrayOutputStream output = new ByteArrayOutputStream();
 
-                ImageIO.write(bufferedImage, "png", output);
+                boolean written = ImageIO.write(bufferedImage, "png", output);
+                if (!written || output.size() == 0) {
+                    // Sem writer PNG compatível para este BufferedImage: pula em vez
+                    // de salvar arquivo vazio.
+                    continue;
+                }
 
+                // Prefixa com página para evitar colisão de nomes ao armazenar.
                 images.add(new KnowledgeImage(
-                        name.getName() + ".png",
+                        "p" + pageNumber + "_" + name.getName() + ".png",
                         output.toByteArray()
                 ));
+
+            } else if (object instanceof PDFormXObject formObject) {
+                // Varre Form XObjects aninhados (imagens embutidas em formulários).
+                collectImages(formObject.getResources(), images, visited, pageNumber);
             }
         }
-
-        return images;
     }
 }

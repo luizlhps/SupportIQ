@@ -1,10 +1,9 @@
 package com.worklyze.supportiq.feature.ingestion.domain.usecases;
 
-import org.apache.tika.exception.TikaException;
-import org.springframework.web.multipart.MultipartFile;
+import com.worklyze.supportiq.config.ai.AiProvider;
 
 import java.io.InputStream;
 
 public interface PdfIngestionUseCase {
-    void execute(String fileName, InputStream inputStream) ;
+    void execute(AiProvider provider, String fileName, InputStream inputStream);
 }

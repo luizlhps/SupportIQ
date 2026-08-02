@@ -1,6 +1,9 @@
 package com.worklyze.supportiq.feature.ingestion.application.usecase;
 
+import com.worklyze.supportiq.config.ai.AiModelRegistry;
+import com.worklyze.supportiq.config.ai.AiProvider;
 import com.worklyze.supportiq.feature.ingestion.application.service.DocumentSplitter;
+import com.worklyze.supportiq.feature.ingestion.application.service.ImageStorageService;
 import com.worklyze.supportiq.feature.embedding.KnowledgeEmbeddingService;
 import com.worklyze.supportiq.feature.embedding.KnowledgeRepository;
 import com.worklyze.supportiq.feature.ingestion.domain.usecases.PdfIngestionUseCase;
@@ -22,21 +25,36 @@ public class PdfIngestionUseCaseImpl implements PdfIngestionUseCase {
     private final DocumentSplitter splitter;
     private final KnowledgeEmbeddingService embeddingService;
     private final KnowledgeRepository repository;
+    private final ImageStorageService imageStorageService;
+    private final AiModelRegistry aiModelRegistry;
 
     @Override
     public void execute(
+            AiProvider provider,
             String fileName,
             InputStream inputStream) {
 
+        AiProvider effective = aiModelRegistry.resolve(provider);
+
         try {
+
+            // Reingestão do mesmo arquivo: remove embeddings e imagens antigas
+            // antes de gravar as novas para evitar conflito entre versões.
+            repository.deleteByFileName(effective, fileName);
+            imageStorageService.deleteAllFor(fileName);
 
             ParsedDocument document = documentParser.parse(fileName, inputStream);
 
             List<TextSegment> chunks = splitter.split(document);
 
-            List<Embedding> embedded = embeddingService.embed(chunks);
+            if (chunks.isEmpty()) {
+                return;
+            }
+
+            List<Embedding> embedded = embeddingService.embed(effective, chunks);
 
             repository.saveAll(
+                    effective,
                     embedded,
                     chunks
             );

@@ -21,10 +21,15 @@ public class ChatController {
     private final AskQuestionUseCase askQuestionUseCase;
 
     @PostMapping
-    @Operation(summary = "Ask a question based on the ingested knowledge base, optionally continuing a session for multi-turn context")
+    @Operation(
+            summary = "Ask a question based on the ingested knowledge base",
+            description = "Recupera contexto via busca vetorial no provider selecionado, "
+                    + "opcionalmente continua uma sessao para contexto multi-turn e "
+                    + "retorna a resposta do modelo com as imagens relevantes."
+    )
     public ResponseEntity<ChatResponse> ask(@Valid @RequestBody ChatRequest request) {
 
-        ChatAnswer chatAnswer = askQuestionUseCase.execute(request.sessionId(), request.question());
+        ChatAnswer chatAnswer = askQuestionUseCase.execute(request.provider(), request.sessionId(), request.question());
 
         return ResponseEntity.ok(new ChatResponse(chatAnswer.answer(), chatAnswer.sessionId(), chatAnswer.images()));
     }
