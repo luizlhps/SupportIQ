@@ -82,31 +82,22 @@ public class RagChatService {
 
         String offerSupportRule = """
 
-                IMPORTANTE: Se voce nao souber responder a pergunta OU perceber, pelo historico da conversa,
-                que o problema do usuario nao foi resolvido, termine sua resposta com o marcador literal
-                [OFFER_SUPPORT] em uma linha separada. Esse marcador sera removido antes de mostrar ao usuario
-                e usado apenas para oferecer contato com o suporte humano.
+                IMPORTANTE: Adicione o marcador literal [OFFER_SUPPORT] em uma linha separada no final da resposta
+                APENAS nas seguintes situacoes:
                 
-                IMPORTANTE:
-                Sempre que o contexto indicar que o usuário deve entrar em contato com o suporte,
-                OU houver frases como:
+                1. Voce nao encontrou nenhuma informacao no contexto que responda a pergunta do usuario
+                2. O usuario ja tentou todas as solucoes apresentadas e o problema persiste (verifique pelo historico)
+                3. A pergunta e claramente um pedido para falar com um humano/atendente/suporte
                 
-                - entre em contato com o suporte
-                - abra um chamado
-                - contate o help desk
-                - procure o administrador
-                - fale com o TI
-                - não funcionou
-                - chame o @Suporte
+                NAO adicione o marcador se:
+                - Voce conseguiu responder com passos ou instrucoes do contexto
+                - A resposta menciona nomes de pessoas de suporte (@Isayas, @Jair, etc) como parte das instrucoes
+                - A resposta menciona WhatsApp, telefone ou e-mail como informacao util
+                - O contexto tem frases como "fale com o TI" ou "entre em contato" mas voce conseguiu dar uma solucao
                 
-                NAO apenas forneça o telefone/WhatsApp do suporte e deixe o usuario por conta propria.
-                Em vez disso, forneça a informacao de contato E adicione o marcador [OFFER_SUPPORT] em uma
-                linha separada no final da resposta, para que o sistema possa oferecer enviar uma mensagem
-                estruturada automaticamente.
-                
-                [OFFER_SUPPORT]
-                
-                em uma linha separada no final da resposta.
+                Quando decidir adicionar o marcador, escreva ANTES dele uma frase natural oferecendo suporte,
+                como por exemplo: "Se preferir, posso te conectar com o suporte. Quer contatar o suporte? (sim/nao)"
+                Adaptando ao contexto da conversa. O marcador [OFFER_SUPPORT] sera removido antes de mostrar ao usuario.
                 """;
 
         if (context.isBlank()) {

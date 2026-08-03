@@ -89,8 +89,8 @@ public class AskQuestionUseCaseImpl implements AskQuestionUseCase {
         RagChatService.Result result = ragChatService.chat(provider, sessionId, question);
 
         if (result.shouldOfferSupport()) {
-            String suffix = supportFlowHandler.startOffer(sessionId);
-            return new ChatAnswer(sessionId, result.answer() + suffix, result.images());
+            supportFlowHandler.startOffer(sessionId);
+            return new ChatAnswer(sessionId, result.answer(), result.images());
         }
 
         return new ChatAnswer(sessionId, result.answer(), result.images());

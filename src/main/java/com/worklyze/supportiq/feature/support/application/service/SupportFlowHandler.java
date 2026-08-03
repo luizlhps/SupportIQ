@@ -45,12 +45,12 @@ public class SupportFlowHandler {
     }
 
     /**
-     * Marca a sessao como aguardando confirmacao e retorna o texto a ser
-     * anexado a resposta original.
+     * Marca a sessao como aguardando confirmacao. A frase de oferta de suporte
+     * ja foi escrita pela IA do RAG como parte da resposta (antes do marcador).
      */
     public String startOffer(String sessionId) {
         sessionStore.getOrCreate(sessionId).setState(SupportFlowState.AWAITING_SUPPORT_CONFIRMATION);
-        return "\n\nParece que não consegui te ajudar totalmente. Quer contatar o suporte? (sim/nao)";
+        return "";
     }
 
     /**
