@@ -61,6 +61,11 @@ public class AskQuestionUseCaseImpl implements AskQuestionUseCase {
             return proceedWithChat(effectiveProvider, activeSessionId, question);
         }
 
+        if (state == SupportFlowState.AWAITING_NAME) {
+            SupportReply reply = handleNameInput(effectiveProvider, activeSessionId, question);
+            return asChatAnswer(activeSessionId, reply);
+        }
+
         if (state == SupportFlowState.AWAITING_MESSAGE_CONFIRMATION) {
             if (decision.contains("SUPPORT")) {
                 SupportReply reply = handleMessageConfirmation(effectiveProvider, activeSessionId, question);
@@ -94,21 +99,54 @@ public class AskQuestionUseCaseImpl implements AskQuestionUseCase {
     private String routeIntent(AiProvider provider, String question, SupportFlowState state) {
         ChatModel chatModel = aiModelRegistry.chat(provider);
 
-        String stateContext = switch (state) {
-            case AWAITING_SUPPORT_CONFIRMATION -> "\nO usuario foi oferecido suporte humano e esta respondendo se aceita ou nao. SUPPORT = aceita, CHAT = recusa.";
-            case AWAITING_MESSAGE_CONFIRMATION -> "\nO usuario recebeu um rascunho da mensagem de suporte e esta respondendo. SUPPORT = confirmar/enviar/ajustar, CHAT = cancelar.";
-            case NORMAL -> "";
-        };
+        String routingPrompt = switch (state) {
+            case AWAITING_SUPPORT_CONFIRMATION -> """
+                Você é um roteador de fluxo. O usuário foi oferecido suporte humano e está respondendo se aceita ou nao.
+                Responda APENAS com: SUPPORT ou CHAT
+                
+                - SUPPORT: o usuário aceita/quer suporte (ex: "sim", "claro", "ok", "quero sim", "pode ser")
+                - CHAT: o usuário recusa/não quer (ex: "nao", "não", "nao preciso", "obrigado nao")
+                - Se for ambiguo, responda CHAT
+                
+                Mensagem do usuário: %s
+                """.formatted(question);
 
-        String routingPrompt = """
-            Você é um roteador de fluxo. Analise a mensagem do usuário e decida qual fluxo seguir.
-            Responda APENAS com uma das opções: SUPPORT ou CHAT
-            
-            - SUPPORT: quando o usuário quer falar com suporte humano, abrir ticket, reportar problema não resolvido, ou confirma/envia mensagem de suporte
-            - CHAT: para perguntas gerais, dúvidas técnicas, solicitações de informação, ou recusa/cancela suporte
-            %s
-            Mensagem do usuário: %s
-            """.formatted(stateContext, question);
+            case AWAITING_NAME -> """
+                Você é um roteador de fluxo. O sistema pediu o nome do usuário e ele está respondendo.
+                Responda APENAS com: SUPPORT
+                
+                Em qualquer caso, responda SUPPORT para que o nome seja processado e o fluxo continue.
+                
+                Mensagem do usuário: %s
+                """.formatted(question);
+
+            case AWAITING_MESSAGE_CONFIRMATION -> """
+                Você é um roteador de fluxo. O usuário recebeu um rascunho da mensagem de suporte e está respondendo.
+                Responda APENAS com: SUPPORT ou CHAT
+                
+                - SUPPORT: o usuário confirma/envia/ajusta a mensagem (ex: "sim", "pode enviar", "envia", "ajusta X")
+                - CHAT: o usuário cancela/não quer enviar (ex: "nao", "cancela", "esquece")
+                - Se for ambiguo, responda CHAT
+                
+                Mensagem do usuário: %s
+                """.formatted(question);
+
+            case NORMAL -> """
+                Você é um roteador de fluxo. Analise a mensagem do usuário e decida qual fluxo seguir.
+                Responda APENAS com uma das opções: SUPPORT ou CHAT
+
+                - SUPPORT: APENAS quando o usuário pede EXPLICITAMENTE falar com um humano, atendente, 
+                  suporte humano, abrir chamado/ticket
+                - CHAT: para TODOS os outros casos, incluindo: dúvidas técnicas, problemas com o sistema, 
+                  erros, "não consigo fazer X", "como faço Y", perguntas sobre funcionalidades
+                
+                IMPORTANTE: O fato de o usuário ter um problema ou erro NÃO significa SUPPORT. 
+                O sistema RAG deve tentar responder primeiro. Só use SUPPORT se o usuário 
+                pedir explicitamente contato humano.
+                
+                Mensagem do usuário: %s
+                """.formatted(question);
+        };
 
         List<ChatMessage> routingMessages = List.of(
                 SystemMessage.from(routingPrompt),
@@ -117,6 +155,10 @@ public class AskQuestionUseCaseImpl implements AskQuestionUseCase {
 
         dev.langchain4j.model.chat.response.ChatResponse routingResponse = chatModel.chat(routingMessages);
         return routingResponse.aiMessage().text().trim().toUpperCase();
+    }
+
+    private SupportReply handleNameInput(AiProvider provider, String sessionId, String question) {
+        return supportFlowHandler.handleNameInput(provider, sessionId, question, historyOf(sessionId));
     }
 
     private SupportReply handleMessageConfirmation(AiProvider provider, String sessionId, String question) {

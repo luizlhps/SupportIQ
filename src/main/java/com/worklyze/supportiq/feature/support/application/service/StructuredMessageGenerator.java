@@ -26,6 +26,7 @@ public class StructuredMessageGenerator {
             no formato abaixo, sem adicionar nada alem dela:
 
             *Novo chamado de suporte*
+            - Nome do usuario: %s
             - Sessao: %s
             - Problema: <descricao objetiva do problema do usuario>
             - O que ja foi tentado: <resumo do que foi conversado>
@@ -41,7 +42,8 @@ public class StructuredMessageGenerator {
             AiProvider provider,
             String sessionId,
             String userFeedback,
-            List<ChatMessage> history
+            List<ChatMessage> history,
+            String userName
     ) {
         ChatModel chatModel = aiModelRegistry.chat(provider);
 
@@ -49,7 +51,8 @@ public class StructuredMessageGenerator {
                 ? ""
                 : "Ajustes solicitados pelo usuario: " + userFeedback;
 
-        String instruction = TEMPLATE.formatted(sessionId, feedbackLine);
+        String name = (userName == null || userName.isBlank()) ? "Nao informado" : userName;
+        String instruction = TEMPLATE.formatted(name, sessionId, feedbackLine);
 
         List<ChatMessage> messages = new ArrayList<>(history == null ? List.of() : history);
         messages.add(UserMessage.from(instruction));

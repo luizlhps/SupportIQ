@@ -5,7 +5,6 @@ import com.worklyze.supportiq.config.ai.AiProvider;
 import com.worklyze.supportiq.feature.embedding.KnowledgeRepository;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.data.segment.TextSegment;
@@ -17,11 +16,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -70,10 +66,8 @@ public class RagChatService {
         memory.add(aiMessage);
 
         String raw = aiMessage.text() == null ? "" : aiMessage.text();
-        boolean hasMarker = raw.contains(OFFER_SUPPORT_MARKER);
+        boolean offerSupport = raw.contains(OFFER_SUPPORT_MARKER);
         String clean = raw.replace(OFFER_SUPPORT_MARKER, "").trim();
-
-        boolean offerSupport = hasMarker || aiDetectsSupportOffer(chatModel, clean);
 
         return new Result(clean, imagePaths, offerSupport);
     }
@@ -135,49 +129,19 @@ public class RagChatService {
                 """.formatted(imageInfo, offerSupportRule, context);
     }
 
-    private boolean aiDetectsSupportOffer(ChatModel chatModel, String answer) {
-        if (answer == null || answer.isBlank()) return false;
-
-        String detectionPrompt = """
-            Você é um classificador. Analise a resposta abaixo e diga se ela está oferecendo,
-            sugerindo ou direcionando o usuário a entrar em contato com suporte humano
-            (por WhatsApp, telefone, e-mail, help desk, TI, administrador, chamado, etc).
-
-            Responda APENAS com: SIM ou NAO
-
-            Resposta para analisar:
-            %s
-            """.formatted(answer);
-
-        List<ChatMessage> messages = List.of(
-                SystemMessage.from(detectionPrompt),
-                UserMessage.from(answer)
-        );
-
-        try {
-            ChatResponse response = chatModel.chat(messages);
-            String result = response.aiMessage().text().trim().toUpperCase();
-            return result.startsWith("SIM");
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
     private List<String> extractImagePaths(List<TextSegment> segments) {
 
-        Set<String> paths = new LinkedHashSet<>();
+        if (segments == null || segments.isEmpty()) return List.of();
 
-        for (TextSegment segment : segments) {
-            String images = segment.metadata().getString("images");
-            if (images == null || images.isBlank()) continue;
+        TextSegment topSegment = segments.get(0);
+        String images = topSegment.metadata().getString("images");
+        if (images == null || images.isBlank()) return List.of();
 
-            Arrays.stream(images.split(","))
-                    .map(String::trim)
-                    .filter(s -> !s.isEmpty())
-                    .forEach(paths::add);
-        }
-
-        return new ArrayList<>(paths);
+        return Arrays.stream(images.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .distinct()
+                .toList();
     }
 
     public record Result(String answer, List<String> images, boolean shouldOfferSupport) {}

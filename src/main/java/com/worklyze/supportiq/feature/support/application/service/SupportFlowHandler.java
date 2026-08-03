@@ -64,10 +64,27 @@ public class SupportFlowHandler {
             List<ChatMessage> history
     ) {
         return switch (yesNo.classify(userMessage)) {
-            case YES     -> Optional.of(acceptSupportOffer(provider, sessionId, history));
+            case YES     -> Optional.of(askForName(sessionId));
             case NO      -> Optional.of(declineSupportOffer(sessionId));
             case UNCLEAR -> abandonSupportOffer(sessionId);
         };
+    }
+
+    public SupportReply handleNameInput(
+            AiProvider provider,
+            String sessionId,
+            String userMessage,
+            List<ChatMessage> history
+    ) {
+        String name = userMessage == null ? "" : userMessage.trim();
+        if (name.isBlank()) {
+            return new SupportReply("Por favor, digite seu nome para continuar.");
+        }
+
+        SupportFlowSessionStore.Session session = sessionStore.getOrCreate(sessionId);
+        session.setUserName(name);
+
+        return generateDraft(provider, sessionId, history);
     }
 
     public SupportReply handleMessageConfirmation(
@@ -85,11 +102,17 @@ public class SupportFlowHandler {
 
     // ---- handleSupportConfirmation branches ------------------------------
 
-    private SupportReply acceptSupportOffer(AiProvider provider, String sessionId, List<ChatMessage> history) {
+    private SupportReply askForName(String sessionId) {
+        sessionStore.getOrCreate(sessionId).setState(SupportFlowState.AWAITING_NAME);
+        return new SupportReply("Antes de continuar, qual é o seu nome?");
+    }
 
-        String draft = messageGenerator.generate(provider, sessionId, null, history);
-
+    private SupportReply generateDraft(AiProvider provider, String sessionId, List<ChatMessage> history) {
         SupportFlowSessionStore.Session session = sessionStore.getOrCreate(sessionId);
+        String name = session.userName();
+
+        String draft = messageGenerator.generate(provider, sessionId, null, history, name);
+
         session.setState(SupportFlowState.AWAITING_MESSAGE_CONFIRMATION);
         session.setDraftMessage(draft);
 
@@ -118,16 +141,17 @@ public class SupportFlowHandler {
         SupportFlowSessionStore.Session session = sessionStore.getOrCreate(sessionId);
 
         try {
-            ticketGateway.send(session.draftMessage());
+            String link = ticketGateway.generateLink(session.draftMessage());
+            sessionStore.reset(sessionId);
+            return new SupportReply(
+                    "Clique no link abaixo para enviar a mensagem pelo WhatsApp:\n\n" + link
+            );
         } catch (Exception ex) {
             sessionStore.reset(sessionId);
             return new SupportReply(
-                    "Nao consegui enviar a mensagem para o suporte: " + ex.getMessage()
+                    "Nao consegui gerar o link de suporte: " + ex.getMessage()
             );
         }
-
-        sessionStore.reset(sessionId);
-        return new SupportReply("Mensagem enviada para o suporte. Em breve entrarao em contato.");
     }
 
     private SupportReply cancelDraft(String sessionId) {
@@ -143,8 +167,9 @@ public class SupportFlowHandler {
             String userFeedback,
             List<ChatMessage> history
     ) {
-        String updated = messageGenerator.generate(provider, sessionId, userFeedback, history);
-        sessionStore.getOrCreate(sessionId).setDraftMessage(updated);
+        SupportFlowSessionStore.Session session = sessionStore.getOrCreate(sessionId);
+        String updated = messageGenerator.generate(provider, sessionId, userFeedback, history, session.userName());
+        session.setDraftMessage(updated);
 
         return new SupportReply(
                 "Atualizei a mensagem:\n\n" + updated
