@@ -6,11 +6,16 @@ import com.worklyze.supportiq.feature.chat.application.service.ChatSessionMemory
 import com.worklyze.supportiq.feature.chat.application.service.RagChatService;
 import com.worklyze.supportiq.feature.chat.domain.usecases.AskQuestionUseCase;
 import com.worklyze.supportiq.feature.chat.shared.ChatAnswer;
+import com.worklyze.supportiq.feature.chat.shared.ChatResponse;
 import com.worklyze.supportiq.feature.support.application.service.SupportFlowHandler;
 import com.worklyze.supportiq.feature.support.shared.SupportFlowState;
 import com.worklyze.supportiq.feature.support.shared.SupportReply;
+import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.memory.ChatMemory;
+import dev.langchain4j.model.chat.ChatModel;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -35,34 +40,83 @@ public class AskQuestionUseCaseImpl implements AskQuestionUseCase {
 
     @Override
     public ChatAnswer execute(AiProvider provider, String sessionId, String question) {
-
         AiProvider effectiveProvider = aiModelRegistry.resolve(provider);
+
         String activeSessionId = resolveSessionId(sessionId);
+
         SupportFlowState state = supportFlowHandler.currentState(activeSessionId);
 
-        if (state == SupportFlowState.AWAITING_MESSAGE_CONFIRMATION) {
-            SupportReply reply = handleMessageConfirmation(effectiveProvider, activeSessionId, question);
-
-            return asChatAnswer(activeSessionId, reply);
-        }
+        // USA IA PARA DECIDIR O FLUXO, INCLUINDO CONTEXTO DO ESTADO ATUAL
+        String decision = routeIntent(effectiveProvider, question, state);
 
         if (state == SupportFlowState.AWAITING_SUPPORT_CONFIRMATION) {
-            Optional<SupportReply> intercepted = handleSupportConfirmation(effectiveProvider, activeSessionId, question);
-
-            if (intercepted.isPresent()) {
-                return asChatAnswer(activeSessionId, intercepted.get());
+            if (decision.contains("SUPPORT")) {
+                Optional<SupportReply> reply = handleSupportConfirmation(effectiveProvider, activeSessionId, question);
+                return reply
+                        .map(r -> asChatAnswer(activeSessionId, r))
+                        .orElseGet(() -> proceedWithChat(effectiveProvider, activeSessionId, question));
             }
+            // Usuario nao quer suporte: volta para chat normal
+            supportFlowHandler.reset(activeSessionId);
+            return proceedWithChat(effectiveProvider, activeSessionId, question);
         }
 
-        RagChatService.Result result = ragChatService.chat(effectiveProvider, activeSessionId, question);
+        if (state == SupportFlowState.AWAITING_MESSAGE_CONFIRMATION) {
+            if (decision.contains("SUPPORT")) {
+                SupportReply reply = handleMessageConfirmation(effectiveProvider, activeSessionId, question);
+                return asChatAnswer(activeSessionId, reply);
+            }
+            // Cancela envio e volta para chat
+            supportFlowHandler.reset(activeSessionId);
+            return proceedWithChat(effectiveProvider, activeSessionId, question);
+        }
 
-        if (result.shouldOfferSupport() && supportFlowHandler.isAvailable()) {
+        // Estado NORMAL: IA decide se usuario quer suporte
+        if (decision.contains("SUPPORT")) {
             String suffix = supportFlowHandler.startOffer(activeSessionId);
-
-            return new ChatAnswer(activeSessionId, result.answer() + suffix, result.images());
+            return new ChatAnswer(activeSessionId, "Entendi que você precisa de suporte." + suffix, List.of());
         }
 
-        return new ChatAnswer(activeSessionId, result.answer(), result.images());
+        return proceedWithChat(effectiveProvider, activeSessionId, question);
+    }
+
+    private ChatAnswer proceedWithChat(AiProvider provider, String sessionId, String question) {
+        RagChatService.Result result = ragChatService.chat(provider, sessionId, question);
+
+        if (result.shouldOfferSupport()) {
+            String suffix = supportFlowHandler.startOffer(sessionId);
+            return new ChatAnswer(sessionId, result.answer() + suffix, result.images());
+        }
+
+        return new ChatAnswer(sessionId, result.answer(), result.images());
+    }
+
+    private String routeIntent(AiProvider provider, String question, SupportFlowState state) {
+        ChatModel chatModel = aiModelRegistry.chat(provider);
+
+        String stateContext = switch (state) {
+            case AWAITING_SUPPORT_CONFIRMATION -> "\nO usuario foi oferecido suporte humano e esta respondendo se aceita ou nao. SUPPORT = aceita, CHAT = recusa.";
+            case AWAITING_MESSAGE_CONFIRMATION -> "\nO usuario recebeu um rascunho da mensagem de suporte e esta respondendo. SUPPORT = confirmar/enviar/ajustar, CHAT = cancelar.";
+            case NORMAL -> "";
+        };
+
+        String routingPrompt = """
+            Você é um roteador de fluxo. Analise a mensagem do usuário e decida qual fluxo seguir.
+            Responda APENAS com uma das opções: SUPPORT ou CHAT
+            
+            - SUPPORT: quando o usuário quer falar com suporte humano, abrir ticket, reportar problema não resolvido, ou confirma/envia mensagem de suporte
+            - CHAT: para perguntas gerais, dúvidas técnicas, solicitações de informação, ou recusa/cancela suporte
+            %s
+            Mensagem do usuário: %s
+            """.formatted(stateContext, question);
+
+        List<ChatMessage> routingMessages = List.of(
+                SystemMessage.from(routingPrompt),
+                UserMessage.from(question)
+        );
+
+        dev.langchain4j.model.chat.response.ChatResponse routingResponse = chatModel.chat(routingMessages);
+        return routingResponse.aiMessage().text().trim().toUpperCase();
     }
 
     private SupportReply handleMessageConfirmation(AiProvider provider, String sessionId, String question) {

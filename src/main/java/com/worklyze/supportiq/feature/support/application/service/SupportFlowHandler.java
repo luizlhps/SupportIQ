@@ -40,6 +40,10 @@ public class SupportFlowHandler {
         return sessionStore.getOrCreate(sessionId).state();
     }
 
+    public void reset(String sessionId) {
+        sessionStore.reset(sessionId);
+    }
+
     /**
      * Marca a sessao como aguardando confirmacao e retorna o texto a ser
      * anexado a resposta original.

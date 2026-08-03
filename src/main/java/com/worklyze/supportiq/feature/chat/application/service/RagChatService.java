@@ -5,6 +5,7 @@ import com.worklyze.supportiq.config.ai.AiProvider;
 import com.worklyze.supportiq.feature.embedding.KnowledgeRepository;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.data.segment.TextSegment;
@@ -69,8 +70,10 @@ public class RagChatService {
         memory.add(aiMessage);
 
         String raw = aiMessage.text() == null ? "" : aiMessage.text();
-        boolean offerSupport = raw.contains(OFFER_SUPPORT_MARKER);
-        String clean = offerSupport ? raw.replace(OFFER_SUPPORT_MARKER, "").trim() : raw;
+        boolean hasMarker = raw.contains(OFFER_SUPPORT_MARKER);
+        String clean = raw.replace(OFFER_SUPPORT_MARKER, "").trim();
+
+        boolean offerSupport = hasMarker || aiDetectsSupportOffer(chatModel, clean);
 
         return new Result(clean, imagePaths, offerSupport);
     }
@@ -100,8 +103,12 @@ public class RagChatService {
                 - procure o administrador
                 - fale com o TI
                 - não funcionou
+                - chame o @Suporte
                 
-                adicione o marcador antes de confirmar com a frese, deseja entrar em contato com o suporte ?
+                NAO apenas forneça o telefone/WhatsApp do suporte e deixe o usuario por conta propria.
+                Em vez disso, forneça a informacao de contato E adicione o marcador [OFFER_SUPPORT] em uma
+                linha separada no final da resposta, para que o sistema possa oferecer enviar uma mensagem
+                estruturada automaticamente.
                 
                 [OFFER_SUPPORT]
                 
@@ -126,6 +133,34 @@ public class RagChatService {
                 Contexto:
                 %s
                 """.formatted(imageInfo, offerSupportRule, context);
+    }
+
+    private boolean aiDetectsSupportOffer(ChatModel chatModel, String answer) {
+        if (answer == null || answer.isBlank()) return false;
+
+        String detectionPrompt = """
+            Você é um classificador. Analise a resposta abaixo e diga se ela está oferecendo,
+            sugerindo ou direcionando o usuário a entrar em contato com suporte humano
+            (por WhatsApp, telefone, e-mail, help desk, TI, administrador, chamado, etc).
+
+            Responda APENAS com: SIM ou NAO
+
+            Resposta para analisar:
+            %s
+            """.formatted(answer);
+
+        List<ChatMessage> messages = List.of(
+                SystemMessage.from(detectionPrompt),
+                UserMessage.from(answer)
+        );
+
+        try {
+            ChatResponse response = chatModel.chat(messages);
+            String result = response.aiMessage().text().trim().toUpperCase();
+            return result.startsWith("SIM");
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private List<String> extractImagePaths(List<TextSegment> segments) {
