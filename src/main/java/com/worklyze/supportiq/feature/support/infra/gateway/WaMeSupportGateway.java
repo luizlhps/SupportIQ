@@ -1,6 +1,8 @@
 package com.worklyze.supportiq.feature.support.infra.gateway;
 
 import com.worklyze.supportiq.feature.support.application.gateway.SupportTicketGateway;
+import com.worklyze.supportiq.feature.support.shared.SupportExceptionCode;
+import com.worklyze.supportiq.shared.exceptions.BadRequestException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -36,9 +38,7 @@ public class WaMeSupportGateway implements SupportTicketGateway {
     @Override
     public String generateLink(String structuredMessage) {
         if (!isConfigured()) {
-            throw new IllegalStateException(
-                    "Suporte WhatsApp nao configurado. Defina supportiq.support.whatsapp.phone."
-            );
+            throw new BadRequestException(SupportExceptionCode.WHATSAPP_NOT_CONFIGURED);
         }
 
         String encodedText = URLEncoder.encode(structuredMessage, StandardCharsets.UTF_8);

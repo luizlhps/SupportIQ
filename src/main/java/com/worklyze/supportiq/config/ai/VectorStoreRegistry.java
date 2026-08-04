@@ -1,5 +1,6 @@
 package com.worklyze.supportiq.config.ai;
 
+import com.worklyze.supportiq.shared.exceptions.BadRequestException;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 
@@ -17,8 +18,9 @@ public class VectorStoreRegistry {
         EmbeddingStore<TextSegment> store = stores.get(provider);
 
         if (store == null) {
-            throw new IllegalStateException(
-                    "Vector store nao configurado para o provider: " + provider
+            throw new BadRequestException(
+                    AiExceptionCode.VECTOR_STORE_NOT_CONFIGURED.getMessage().formatted(provider),
+                    AiExceptionCode.VECTOR_STORE_NOT_CONFIGURED.getCode()
             );
         }
 

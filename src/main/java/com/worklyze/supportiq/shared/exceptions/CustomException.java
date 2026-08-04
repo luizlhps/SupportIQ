@@ -20,4 +20,21 @@ public class CustomException extends RuntimeException {
         this.code = "INTERNAL_SERVER_ERROR";
     }
 
+    public CustomException(ExceptionCode ex) {
+        super(ex.getMessage());
+        this.status = HttpStatus.valueOf(500);
+        this.code = "INTERNAL_SERVER_ERROR";
+    }
+
+    public CustomException(ExceptionCode ex, Throwable throwable) {
+        super(ex.getMessage(), throwable);
+        this.status = HttpStatus.valueOf(500);
+        this.code = "INTERNAL_SERVER_ERROR";
+    }
+
+    public CustomException(String message, Throwable throwable) {
+        super(message, throwable);
+        this.status = HttpStatus.valueOf(500);
+        this.code = "INTERNAL_SERVER_ERROR";
+    }
 }

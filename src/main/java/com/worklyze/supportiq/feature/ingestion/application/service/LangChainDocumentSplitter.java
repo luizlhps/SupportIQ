@@ -18,8 +18,7 @@ import java.util.Map;
 public class LangChainDocumentSplitter
         implements DocumentSplitter {
 
-    // Contexto por chunk. ~2000 chars ≈ 500 tokens: bom para embeddings modernos
-    // (text-embedding-3-*, BGE, Cohere) sem estourar limites.
+    // contexto por chunk. ~2000 chars ≈ 500 tokens
     private static final int MAX_CHUNK_CHARS = 2000;
     private static final int MAX_CHUNK_OVERLAP_CHARS = 400;
 
@@ -29,8 +28,8 @@ public class LangChainDocumentSplitter
 
     public LangChainDocumentSplitter(ImageStorageService imageStorageService) {
         this.imageStorageService = imageStorageService;
-        // Sub-splitter por sentença evita exceção quando um parágrafo excede o
-        // tamanho máximo do segmento (comum em PDFs técnicos/jurídicos).
+        // splitter por sentença evita exceção quando um parágrafo excede o
+        // tamanho máximo do segmento PDFs técnicos/jurídicos
         this.splitter =
                 new DocumentByParagraphSplitter(
                         MAX_CHUNK_CHARS,
@@ -81,7 +80,7 @@ public class LangChainDocumentSplitter
 
                 segments.addAll(splitter.split(langDocument));
             } else if (page.hasImages()) {
-                // Página só com imagens (PDF escaneado / diagramas): cria um
+                // pagina só com imagens (PDF escaneado / diagramas) cria um
                 // segmento sintético para que as imagens fiquem indexadas e
                 // recuperáveis via busca vetorial, evitando arquivos órfãos.
                 String placeholder = "[Página "

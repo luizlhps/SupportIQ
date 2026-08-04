@@ -1,9 +1,11 @@
 package com.worklyze.supportiq.feature.ingestion.application.service;
 
 import com.worklyze.supportiq.feature.ingestion.shared.DocumentParser;
+import com.worklyze.supportiq.feature.ingestion.shared.IngestionExceptionCode;
 import com.worklyze.supportiq.feature.ingestion.shared.KnowledgeImage;
 import com.worklyze.supportiq.feature.ingestion.shared.ParsedDocument;
 import com.worklyze.supportiq.feature.ingestion.shared.ParsedPage;
+import com.worklyze.supportiq.shared.exceptions.InternalException;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -53,7 +55,11 @@ public class PdfDocumentParser implements DocumentParser {
             return new ParsedDocument(fileName, pages);
 
         } catch (IOException e) {
-            throw new RuntimeException("Erro ao processar PDF: " + fileName, e);
+            throw new InternalException(
+                    IngestionExceptionCode.PDF_PROCESSING_ERROR.getMessage().formatted(fileName),
+                    IngestionExceptionCode.PDF_PROCESSING_ERROR.getCode(),
+                    e
+            );
         }
     }
 

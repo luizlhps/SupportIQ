@@ -58,10 +58,8 @@ public class SupportFlowHandler {
      *         deve prosseguir com o fluxo normal de chat.
      */
     public Optional<SupportReply> handleSupportConfirmation(
-            AiProvider provider,
             String sessionId,
-            String userMessage,
-            List<ChatMessage> history
+            String userMessage
     ) {
         return switch (yesNo.classify(userMessage)) {
             case YES     -> Optional.of(askForName(sessionId));

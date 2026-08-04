@@ -2,6 +2,8 @@ package com.worklyze.supportiq.feature.ingestion.adapter;
 
 import com.worklyze.supportiq.config.ai.AiProvider;
 import com.worklyze.supportiq.feature.ingestion.domain.usecases.PdfIngestionUseCase;
+import com.worklyze.supportiq.feature.ingestion.shared.IngestionExceptionCode;
+import com.worklyze.supportiq.shared.exceptions.InternalException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -57,7 +59,11 @@ public class IngestionController {
             pdfIngestionUseCase.execute(provider, file.getOriginalFilename(), inputStream);
             return ResponseEntity.noContent().build();
         } catch (IOException e) {
-            throw new RuntimeException("Erro ao processar arquivo: " + file.getOriginalFilename(), e);
+            throw new InternalException(
+                    IngestionExceptionCode.FILE_PROCESSING_ERROR.getMessage().formatted(file.getOriginalFilename()),
+                    IngestionExceptionCode.FILE_PROCESSING_ERROR.getCode(),
+                    e
+            );
         }
     }
 }

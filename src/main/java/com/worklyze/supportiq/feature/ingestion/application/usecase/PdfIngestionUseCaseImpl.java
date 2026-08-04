@@ -8,7 +8,9 @@ import com.worklyze.supportiq.feature.embedding.KnowledgeEmbeddingService;
 import com.worklyze.supportiq.feature.embedding.KnowledgeRepository;
 import com.worklyze.supportiq.feature.ingestion.domain.usecases.PdfIngestionUseCase;
 import com.worklyze.supportiq.feature.ingestion.shared.DocumentParser;
+import com.worklyze.supportiq.feature.ingestion.shared.IngestionExceptionCode;
 import com.worklyze.supportiq.feature.ingestion.shared.ParsedDocument;
+import com.worklyze.supportiq.shared.exceptions.InternalException;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import lombok.RequiredArgsConstructor;
@@ -60,7 +62,11 @@ public class PdfIngestionUseCaseImpl implements PdfIngestionUseCase {
             );
 
         } catch (Exception ex) {
-            throw new RuntimeException("Erro ao processar PDF: " + fileName, ex);
+            throw new InternalException(
+                    IngestionExceptionCode.PDF_PROCESSING_ERROR.getMessage().formatted(fileName),
+                    IngestionExceptionCode.PDF_PROCESSING_ERROR.getCode(),
+                    ex
+            );
         }
     }
 }

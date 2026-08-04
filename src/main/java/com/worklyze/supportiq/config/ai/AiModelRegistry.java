@@ -1,5 +1,6 @@
 package com.worklyze.supportiq.config.ai;
 
+import com.worklyze.supportiq.shared.exceptions.BadRequestException;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import org.springframework.beans.factory.annotation.Value;
@@ -55,9 +56,9 @@ public class AiModelRegistry {
         ChatModel model = chatModels.get(effective);
 
         if (model == null) {
-            throw new IllegalStateException(
-                    "Chat model nao configurado para o provider: " + effective
-                            + ". Configure a API key correspondente."
+            throw new BadRequestException(
+                    AiExceptionCode.CHAT_MODEL_NOT_CONFIGURED.getMessage().formatted(effective),
+                    AiExceptionCode.CHAT_MODEL_NOT_CONFIGURED.getCode()
             );
         }
 
@@ -69,9 +70,9 @@ public class AiModelRegistry {
         EmbeddingModel model = embeddingModels.get(effective);
 
         if (model == null) {
-            throw new IllegalStateException(
-                    "Embedding model nao configurado para o provider: " + effective
-                            + ". Configure a API key correspondente."
+            throw new BadRequestException(
+                    AiExceptionCode.EMBEDDING_MODEL_NOT_CONFIGURED.getMessage().formatted(effective),
+                    AiExceptionCode.EMBEDDING_MODEL_NOT_CONFIGURED.getCode()
             );
         }
 

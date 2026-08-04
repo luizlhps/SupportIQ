@@ -1,6 +1,8 @@
 package com.worklyze.supportiq.feature.ingestion.application.service;
 
+import com.worklyze.supportiq.feature.ingestion.shared.IngestionExceptionCode;
 import com.worklyze.supportiq.feature.ingestion.shared.KnowledgeImage;
+import com.worklyze.supportiq.shared.exceptions.InternalException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -43,7 +45,11 @@ public class LocalImageStorageService implements ImageStorageService {
         try {
             Files.createDirectories(pageDir);
         } catch (IOException e) {
-            throw new RuntimeException("Erro ao criar diretório de imagens: " + pageDir, e);
+            throw new InternalException(
+                    IngestionExceptionCode.IMAGE_DIR_CREATE_ERROR.getMessage().formatted(pageDir),
+                    IngestionExceptionCode.IMAGE_DIR_CREATE_ERROR.getCode(),
+                    e
+            );
         }
 
         List<String> storedPaths = new ArrayList<>();
@@ -54,7 +60,11 @@ public class LocalImageStorageService implements ImageStorageService {
             try {
                 Files.write(target, image.content());
             } catch (IOException e) {
-                throw new RuntimeException("Erro ao salvar imagem: " + target, e);
+                throw new InternalException(
+                        IngestionExceptionCode.IMAGE_SAVE_ERROR.getMessage().formatted(target),
+                        IngestionExceptionCode.IMAGE_SAVE_ERROR.getCode(),
+                        e
+                );
             }
 
             String relativePath = baseUrl + "/" + safeDocName + "/" + pageNumber + "/" + image.fileName();
@@ -83,11 +93,19 @@ public class LocalImageStorageService implements ImageStorageService {
                         try {
                             Files.deleteIfExists(path);
                         } catch (IOException e) {
-                            throw new RuntimeException("Erro ao remover arquivo: " + path, e);
+                            throw new InternalException(
+                                    IngestionExceptionCode.IMAGE_FILE_DELETE_ERROR.getMessage().formatted(path),
+                                    IngestionExceptionCode.IMAGE_FILE_DELETE_ERROR.getCode(),
+                                    e
+                            );
                         }
                     });
         } catch (IOException e) {
-            throw new RuntimeException("Erro ao remover diretório de imagens: " + docDir, e);
+            throw new InternalException(
+                    IngestionExceptionCode.IMAGE_DIR_DELETE_ERROR.getMessage().formatted(docDir),
+                    IngestionExceptionCode.IMAGE_DIR_DELETE_ERROR.getCode(),
+                    e
+            );
         }
     }
 

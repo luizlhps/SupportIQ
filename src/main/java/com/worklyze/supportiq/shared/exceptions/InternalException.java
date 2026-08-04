@@ -19,4 +19,10 @@ public class InternalException extends CustomException {
         this.status = HttpStatus.valueOf(500);
         this.code = exceptionCode.getCode();
     }
+
+    public InternalException(String message, String code, Throwable cause) {
+        super(message, cause);
+        this.status = HttpStatus.valueOf(500);
+        this.code = code;
+    }
 }
