@@ -1,5 +1,6 @@
 package com.worklyze.supportiq.feature.support.application.service;
 
+import com.worklyze.supportiq.config.ai.AiModelRegistry;
 import com.worklyze.supportiq.config.ai.AiProvider;
 import com.worklyze.supportiq.feature.support.application.gateway.SupportTicketGateway;
 import com.worklyze.supportiq.feature.support.shared.SupportFlowState;
@@ -30,7 +31,8 @@ public class SupportFlowHandler {
     private final SupportFlowSessionStore sessionStore;
     private final SupportTicketGateway ticketGateway;
     private final StructuredMessageGenerator messageGenerator;
-    private final YesNoInterpreter yesNo;
+    private final AiYesNoInterpreter aiYesNo;
+    private final AiModelRegistry aiModelRegistry;
 
     public boolean isAvailable() {
         return ticketGateway.isConfigured();
@@ -58,10 +60,12 @@ public class SupportFlowHandler {
      *         deve prosseguir com o fluxo normal de chat.
      */
     public Optional<SupportReply> handleSupportConfirmation(
+            AiProvider provider,
             String sessionId,
             String userMessage
     ) {
-        return switch (yesNo.classify(userMessage)) {
+        AiProvider resolved = aiModelRegistry.resolve(provider);
+        return switch (aiYesNo.classify(resolved, userMessage)) {
             case YES     -> Optional.of(askForName(sessionId));
             case NO      -> Optional.of(declineSupportOffer(sessionId));
             case UNCLEAR -> abandonSupportOffer(sessionId);
@@ -91,7 +95,8 @@ public class SupportFlowHandler {
             String userMessage,
             List<ChatMessage> history
     ) {
-        return switch (yesNo.classify(userMessage)) {
+        AiProvider resolved = aiModelRegistry.resolve(provider);
+        return switch (aiYesNo.classify(resolved, userMessage)) {
             case YES     -> sendDraft(sessionId);
             case NO      -> cancelDraft(sessionId);
             case UNCLEAR -> adjustDraft(provider, sessionId, userMessage, history);

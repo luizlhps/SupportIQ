@@ -4,13 +4,12 @@ import com.worklyze.supportiq.config.ai.AiModelRegistry;
 import com.worklyze.supportiq.config.ai.AiProvider;
 import com.worklyze.supportiq.feature.chat.application.service.ChatSessionMemoryStore;
 import com.worklyze.supportiq.feature.chat.application.service.RagChatService;
+import com.worklyze.supportiq.feature.chat.application.service.ToolAwareRagChatService;
 import com.worklyze.supportiq.feature.chat.domain.usecases.AskQuestionUseCase;
 import com.worklyze.supportiq.feature.chat.shared.ChatAnswer;
-import com.worklyze.supportiq.feature.chat.shared.ChatResponse;
 import com.worklyze.supportiq.feature.support.application.service.SupportFlowHandler;
 import com.worklyze.supportiq.feature.support.shared.SupportFlowState;
 import com.worklyze.supportiq.feature.support.shared.SupportReply;
-import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -36,6 +35,7 @@ public class AskQuestionUseCaseImpl implements AskQuestionUseCase {
     private final AiModelRegistry aiModelRegistry;
     private final ChatSessionMemoryStore chatSessionMemoryStore;
     private final RagChatService ragChatService;
+    private final ToolAwareRagChatService toolAwareRagChatService;
     private final SupportFlowHandler supportFlowHandler;
 
     @Override
@@ -51,7 +51,7 @@ public class AskQuestionUseCaseImpl implements AskQuestionUseCase {
 
         if (state == SupportFlowState.AWAITING_SUPPORT_CONFIRMATION) {
             if (decision.contains("SUPPORT")) {
-                Optional<SupportReply> reply = handleSupportConfirmation(activeSessionId, question);
+                Optional<SupportReply> reply = handleSupportConfirmation(effectiveProvider, activeSessionId, question);
 
                 return reply
                         .map(r -> asChatAnswer(activeSessionId, r))
@@ -89,14 +89,20 @@ public class AskQuestionUseCaseImpl implements AskQuestionUseCase {
     }
 
     private ChatAnswer proceedWithChat(AiProvider provider, String sessionId, String question) {
-        RagChatService.Result result = ragChatService.chat(provider, sessionId, question);
+        // Tenta primeiro com tools habilitadas
+        try {
+            ToolAwareRagChatService.Result toolResult = toolAwareRagChatService.chat(provider, sessionId, question);
+            return new ChatAnswer(sessionId, toolResult.answer(), toolResult.images());
+        } catch (Exception e) {
+            // Fallback para RAG sem tools
+            RagChatService.Result result = ragChatService.chat(provider, sessionId, question);
 
-        if (result.shouldOfferSupport()) {
-            supportFlowHandler.startOffer(sessionId);
+            if (result.shouldOfferSupport()) {
+                supportFlowHandler.startOffer(sessionId);
+            }
+
             return new ChatAnswer(sessionId, result.answer(), result.images());
         }
-
-        return new ChatAnswer(sessionId, result.answer(), result.images());
     }
 
     private String routeIntent(AiProvider provider, String question, SupportFlowState state) {
@@ -168,8 +174,8 @@ public class AskQuestionUseCaseImpl implements AskQuestionUseCase {
         return supportFlowHandler.handleMessageConfirmation(provider, sessionId, question, historyOf(sessionId));
     }
 
-    private Optional<SupportReply> handleSupportConfirmation(String sessionId, String question) {
-        return supportFlowHandler.handleSupportConfirmation(sessionId, question);
+    private Optional<SupportReply> handleSupportConfirmation(AiProvider provider, String sessionId, String question) {
+        return supportFlowHandler.handleSupportConfirmation(provider, sessionId, question);
     }
 
     private String resolveSessionId(String sessionId) {
