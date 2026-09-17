@@ -43,19 +43,23 @@ public class SupportTools {
 
     @Tool("""
             Prepara uma mensagem estruturada para o suporte e pede confirmação do usuário.
-            Use esta ferramenta quando:
-            - O usuário confirmar que deseja falar com o suporte
-            - Você não conseguir resolver o problema do usuário
-            - O usuário solicitar explicitamente um atendente humano
+            Use esta ferramenta SOMENTE DEPOIS de:
+            1. O usuário aceitar falar com o suporte
+            2. Perguntar e receber o nome do usuário (use askUserName primeiro)
             
             IMPORTANTE: Retorna um RASCUNHO para o usuário revisar ANTES de gerar o link.
             O usuário deve confirmar se a descrição está correta.
             """)
     public String prepareSupportMessage(
-            @P("Nome do usuário para identificação no ticket") String userName,
+            @P("Nome do usuário (informado pelo próprio usuário após askUserName)") String userName,
             @P("Descrição clara e objetiva do problema do usuário") String problemDescription,
             @P("Resumo do que já foi tentado na conversa") String attemptedSolutions
     ) {
+        // Valida se o nome foi fornecido
+        if (userName == null || userName.isBlank()) {
+            return askUserName();
+        }
+
         log.info("Preparando mensagem de suporte para usuário: {}", userName);
 
         String structuredMessage = formatTicketMessage(userName, problemDescription, attemptedSolutions);
@@ -122,9 +126,33 @@ public class SupportTools {
             return "Infelizmente o suporte via WhatsApp não está disponível no momento.";
         }
 
+        String sessionId = currentSessionId();
+        SupportSession session = sessionGateway.getOrCreate(sessionId);
+        sessionGateway.save(sessionId, session.toBuilder()
+                .state(SupportFlowState.AWAITING_SUPPORT_CONFIRMATION)
+                .build());
+
         log.info("Oferecendo suporte humano. Motivo: {}", reason);
         return "Entendo que isso pode ser frustrante. Gostaria que eu te conectasse com " +
                 "nosso time de suporte para resolver isso? (sim/não)";
+    }
+
+    @Tool("""
+            Pergunta o nome do usuário para identificação no chamado de suporte.
+            Use esta ferramenta DEPOIS que o usuário aceitar falar com o suporte
+            e ANTES de preparar a mensagem estruturada.
+            
+            IMPORTANTE: Sempre pergunte o nome antes de chamar prepareSupportMessage.
+            """)
+    public String askUserName() {
+        String sessionId = currentSessionId();
+        SupportSession session = sessionGateway.getOrCreate(sessionId);
+        sessionGateway.save(sessionId, session.toBuilder()
+                .state(SupportFlowState.AWAITING_NAME)
+                .build());
+
+        log.info("Solicitando nome do usuário para o chamado");
+        return "Para abrir o chamado, preciso do seu nome. Como você gostaria de ser identificado?";
     }
 
     private String formatTicketMessage(String userName, String problem, String attempted) {
