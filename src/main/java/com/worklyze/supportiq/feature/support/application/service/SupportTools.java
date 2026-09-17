@@ -1,6 +1,9 @@
 package com.worklyze.supportiq.feature.support.application.service;
 
+import com.worklyze.supportiq.feature.support.application.gateway.SupportSessionGateway;
 import com.worklyze.supportiq.feature.support.application.gateway.SupportTicketGateway;
+import com.worklyze.supportiq.feature.support.shared.SupportFlowState;
+import com.worklyze.supportiq.feature.support.shared.SupportSession;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +24,11 @@ import org.springframework.stereotype.Component;
 public class SupportTools {
 
     private final SupportTicketGateway ticketGateway;
+    private final SupportSessionGateway sessionGateway;
+
+    private String currentSessionId() {
+        return SupportSessionContext.get();
+    }
 
     @Tool("""
             Verifica se o sistema de suporte via WhatsApp está configurado e disponível.
@@ -34,26 +42,68 @@ public class SupportTools {
     }
 
     @Tool("""
-            Gera um link do WhatsApp para o usuário entrar em contato com o suporte.
+            Prepara uma mensagem estruturada para o suporte e pede confirmação do usuário.
             Use esta ferramenta quando:
             - O usuário confirmar que deseja falar com o suporte
             - Você não conseguir resolver o problema do usuário
             - O usuário solicitar explicitamente um atendente humano
             
-            Retorna o link wa.me pronto para o usuário clicar e enviar a mensagem.
+            IMPORTANTE: Retorna um RASCUNHO para o usuário revisar ANTES de gerar o link.
+            O usuário deve confirmar se a descrição está correta.
             """)
-    public String generateSupportLink(
+    public String prepareSupportMessage(
             @P("Nome do usuário para identificação no ticket") String userName,
             @P("Descrição clara e objetiva do problema do usuário") String problemDescription,
             @P("Resumo do que já foi tentado na conversa") String attemptedSolutions
     ) {
-        log.info("Gerando link de suporte para usuário: {}", userName);
+        log.info("Preparando mensagem de suporte para usuário: {}", userName);
 
         String structuredMessage = formatTicketMessage(userName, problemDescription, attemptedSolutions);
-        String link = ticketGateway.generateLink(structuredMessage);
 
-        log.info("Link de suporte gerado com sucesso");
-        return link;
+        // Salva o rascunho na sessão para confirmar depois
+        String sessionId = currentSessionId();
+        SupportSession session = sessionGateway.getOrCreate(sessionId);
+        sessionGateway.save(sessionId, session.toBuilder()
+                .state(SupportFlowState.AWAITING_MESSAGE_CONFIRMATION)
+                .draftMessage(structuredMessage)
+                .userName(userName)
+                .build());
+
+        log.info("Rascunho salvo, aguardando confirmação do usuário");
+
+        return "Preparei a seguinte mensagem para o suporte:\n\n" + structuredMessage +
+                "\n\nEssa descrição está correta? (responda 'sim' para enviar, 'não' para cancelar, " +
+                "ou me diga o que precisa ser corrigido)";
+    }
+
+    @Tool("""
+            Gera o link do WhatsApp após o usuário confirmar a mensagem.
+            SOMENTE use esta ferramenta DEPOIS que o usuário confirmar que a mensagem está correta.
+            Nunca use diretamente sem preparar a mensagem antes com prepareSupportMessage.
+            """)
+    public String confirmAndGenerateLink() {
+        String sessionId = currentSessionId();
+        SupportSession session = sessionGateway.getOrCreate(sessionId);
+
+        if (session.getState() != SupportFlowState.AWAITING_MESSAGE_CONFIRMATION) {
+            return "Erro: Nenhuma mensagem preparada para confirmação. Use prepareSupportMessage primeiro.";
+        }
+
+        String draftMessage = session.getDraftMessage();
+        if (draftMessage == null || draftMessage.isBlank()) {
+            return "Erro: Mensagem de suporte não encontrada.";
+        }
+
+        try {
+            String link = ticketGateway.generateLink(draftMessage);
+            sessionGateway.reset(sessionId);
+
+            log.info("Link de suporte gerado após confirmação");
+            return "Clique no link abaixo para enviar a mensagem pelo WhatsApp:\n\n" + link;
+        } catch (Exception ex) {
+            sessionGateway.reset(sessionId);
+            return "Não consegui gerar o link de suporte: " + ex.getMessage();
+        }
     }
 
     @Tool("""

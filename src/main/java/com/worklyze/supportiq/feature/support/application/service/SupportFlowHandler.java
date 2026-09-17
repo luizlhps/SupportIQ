@@ -2,9 +2,11 @@ package com.worklyze.supportiq.feature.support.application.service;
 
 import com.worklyze.supportiq.config.ai.AiModelRegistry;
 import com.worklyze.supportiq.config.ai.AiProvider;
+import com.worklyze.supportiq.feature.support.application.gateway.SupportSessionGateway;
 import com.worklyze.supportiq.feature.support.application.gateway.SupportTicketGateway;
 import com.worklyze.supportiq.feature.support.shared.SupportFlowState;
 import com.worklyze.supportiq.feature.support.shared.SupportReply;
+import com.worklyze.supportiq.feature.support.shared.SupportSession;
 import dev.langchain4j.data.message.ChatMessage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -28,7 +30,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class SupportFlowHandler {
 
-    private final SupportFlowSessionStore sessionStore;
+    private final SupportSessionGateway sessionGateway;
     private final SupportTicketGateway ticketGateway;
     private final StructuredMessageGenerator messageGenerator;
     private final AiYesNoInterpreter aiYesNo;
@@ -39,11 +41,11 @@ public class SupportFlowHandler {
     }
 
     public SupportFlowState currentState(String sessionId) {
-        return sessionStore.getOrCreate(sessionId).state();
+        return sessionGateway.getOrCreate(sessionId).getState();
     }
 
     public void reset(String sessionId) {
-        sessionStore.reset(sessionId);
+        sessionGateway.reset(sessionId);
     }
 
     /**
@@ -51,7 +53,10 @@ public class SupportFlowHandler {
      * ja foi escrita pela IA do RAG como parte da resposta (antes do marcador).
      */
     public String startOffer(String sessionId) {
-        sessionStore.getOrCreate(sessionId).setState(SupportFlowState.AWAITING_SUPPORT_CONFIRMATION);
+        SupportSession session = sessionGateway.getOrCreate(sessionId);
+        sessionGateway.save(sessionId, session.toBuilder()
+                .state(SupportFlowState.AWAITING_SUPPORT_CONFIRMATION)
+                .build());
         return "";
     }
 
@@ -83,8 +88,10 @@ public class SupportFlowHandler {
             return new SupportReply("Por favor, digite seu nome para continuar.");
         }
 
-        SupportFlowSessionStore.Session session = sessionStore.getOrCreate(sessionId);
-        session.setUserName(name);
+        SupportSession session = sessionGateway.getOrCreate(sessionId);
+        sessionGateway.save(sessionId, session.toBuilder()
+                .userName(name)
+                .build());
 
         return generateDraft(provider, sessionId, history);
     }
@@ -106,18 +113,23 @@ public class SupportFlowHandler {
     // ---- handleSupportConfirmation branches ------------------------------
 
     private SupportReply askForName(String sessionId) {
-        sessionStore.getOrCreate(sessionId).setState(SupportFlowState.AWAITING_NAME);
+        SupportSession session = sessionGateway.getOrCreate(sessionId);
+        sessionGateway.save(sessionId, session.toBuilder()
+                .state(SupportFlowState.AWAITING_NAME)
+                .build());
         return new SupportReply("Antes de continuar, qual é o seu nome?");
     }
 
     private SupportReply generateDraft(AiProvider provider, String sessionId, List<ChatMessage> history) {
-        SupportFlowSessionStore.Session session = sessionStore.getOrCreate(sessionId);
-        String name = session.userName();
+        SupportSession session = sessionGateway.getOrCreate(sessionId);
+        String name = session.getUserName();
 
         String draft = messageGenerator.generate(provider, sessionId, null, history, name);
 
-        session.setState(SupportFlowState.AWAITING_MESSAGE_CONFIRMATION);
-        session.setDraftMessage(draft);
+        sessionGateway.save(sessionId, session.toBuilder()
+                .state(SupportFlowState.AWAITING_MESSAGE_CONFIRMATION)
+                .draftMessage(draft)
+                .build());
 
         return new SupportReply(
                 "Preparei esta mensagem para o suporte:\n\n" + draft
@@ -127,30 +139,29 @@ public class SupportFlowHandler {
     }
 
     private SupportReply declineSupportOffer(String sessionId) {
-        sessionStore.reset(sessionId);
+        sessionGateway.reset(sessionId);
         return new SupportReply("Sem problemas. Como posso te ajudar?");
     }
 
     private Optional<SupportReply> abandonSupportOffer(String sessionId) {
         // Resposta ambigua: descarta o fluxo e sinaliza ao chamador para seguir como pergunta normal.
-        sessionStore.reset(sessionId);
+        sessionGateway.reset(sessionId);
         return Optional.empty();
     }
 
     // ---- handleMessageConfirmation branches ------------------------------
 
     private SupportReply sendDraft(String sessionId) {
-
-        SupportFlowSessionStore.Session session = sessionStore.getOrCreate(sessionId);
+        SupportSession session = sessionGateway.getOrCreate(sessionId);
 
         try {
-            String link = ticketGateway.generateLink(session.draftMessage());
-            sessionStore.reset(sessionId);
+            String link = ticketGateway.generateLink(session.getDraftMessage());
+            sessionGateway.reset(sessionId);
             return new SupportReply(
                     "Clique no link abaixo para enviar a mensagem pelo WhatsApp:\n\n" + link
             );
         } catch (Exception ex) {
-            sessionStore.reset(sessionId);
+            sessionGateway.reset(sessionId);
             return new SupportReply(
                     "Nao consegui gerar o link de suporte: " + ex.getMessage()
             );
@@ -158,7 +169,7 @@ public class SupportFlowHandler {
     }
 
     private SupportReply cancelDraft(String sessionId) {
-        sessionStore.reset(sessionId);
+        sessionGateway.reset(sessionId);
         return new SupportReply(
                 "Envio cancelado. Se quiser, me diga como posso continuar te ajudando."
         );
@@ -170,9 +181,12 @@ public class SupportFlowHandler {
             String userFeedback,
             List<ChatMessage> history
     ) {
-        SupportFlowSessionStore.Session session = sessionStore.getOrCreate(sessionId);
-        String updated = messageGenerator.generate(provider, sessionId, userFeedback, history, session.userName());
-        session.setDraftMessage(updated);
+        SupportSession session = sessionGateway.getOrCreate(sessionId);
+        String updated = messageGenerator.generate(provider, sessionId, userFeedback, history, session.getUserName());
+
+        sessionGateway.save(sessionId, session.toBuilder()
+                .draftMessage(updated)
+                .build());
 
         return new SupportReply(
                 "Atualizei a mensagem:\n\n" + updated

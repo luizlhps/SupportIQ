@@ -3,6 +3,7 @@ package com.worklyze.supportiq.feature.chat.application.service;
 import com.worklyze.supportiq.config.ai.AiModelRegistry;
 import com.worklyze.supportiq.config.ai.AiProvider;
 import com.worklyze.supportiq.feature.embedding.KnowledgeRepository;
+import com.worklyze.supportiq.feature.support.application.service.SupportSessionContext;
 import com.worklyze.supportiq.feature.support.application.service.SupportTools;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.message.AiMessage;
@@ -81,7 +82,8 @@ public class ToolAwareRagChatService {
         boolean toolsUsed = false;
 
         if (useTools) {
-            // Usa AiServices com tools
+            // Seta o contexto da sessão para as tools
+            SupportSessionContext.set(sessionId);
             try {
                 SupportAssistant assistant = AiServices.builder(SupportAssistant.class)
                         .chatModel(chatModel)
@@ -95,6 +97,8 @@ public class ToolAwareRagChatService {
             } catch (Exception e) {
                 log.warn("Falha ao usar tools, fallback para chat simples: {}", e.getMessage());
                 answer = fallbackChat(chatModel, memory);
+            } finally {
+                SupportSessionContext.clear();
             }
         } else {
             answer = fallbackChat(chatModel, memory);
